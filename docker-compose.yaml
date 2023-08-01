@@ -2,7 +2,10 @@ version: '3'
 services:
   sqlite3:
     image: nouchka/sqlite3:latest
+    container_name: sqlite3
     stdin_open: true
     tty: true
     volumes:
       - ./server/db/:/root/db/
+    # This will create a test database and quotation table to store the quotations from the API.
+    command: test.db "CREATE TABLE IF NOT EXISTS quotation (id integer PRIMARY KEY AUTOINCREMENT, code text, codein text, name text, high text, low text, var_bid text, pct_change text, bid text, ask text, timestamp text, create_date text);"

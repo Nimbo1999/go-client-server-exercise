@@ -51,85 +51,51 @@ func NewSQLite() (*sql.DB, error) {
 }
 
 func registerRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/", HomeHandlerFunction)
 	mux.HandleFunc("/cotacao", CotacaoHandlerFunction)
 }
 
-func HomeHandlerFunction(w http.ResponseWriter, r *http.Request) {
-	http.Redirect(w, r, "http://localhost:8080/cotacao", http.StatusSeeOther)
-}
-
 func CotacaoHandlerFunction(w http.ResponseWriter, r *http.Request) {
-	resp, err := NewHttpClientRequest()
-	if err != nil {
-		SendError(w, &ErrorResponse{
-			Message: "Could not finish your request",
-			Reason:  err.Error(),
-			Status:  http.StatusRequestTimeout,
-		})
-		return
-	}
-	defer resp.Body.Close()
-	data, err := io.ReadAll(resp.Body)
+	log.Println("Iniciando cotacao controller handler!")
+	defer log.Println("Finalizando cotacao controller handler!")
+	w.Header().Add("Content-Type", "application/json")
 
+	usdToBrl, err := NewHttpClientRequest()
 	if err != nil {
+		log.Println(err)
 		SendError(w, &ErrorResponse{
-			Message: "Could no read data from request",
-			Reason:  err.Error(),
-			Status:  http.StatusInternalServerError,
-		})
-		log.Println(err.Error())
-		return
-	}
-	var quotation USDToBRL
-	err = json.Unmarshal(data, &quotation)
-	if err != nil {
-		log.Println("Unabled to Unmarshal JSON data")
-		SendError(w, &ErrorResponse{
-			Message: "Error while unmarshal JSON",
+			Message: "There was an error while retrieving the current quotation.",
 			Reason:  err.Error(),
 			Status:  http.StatusInternalServerError,
 		})
 		return
 	}
 
-	db, err := NewSQLite()
+	err = SaveQuotation(usdToBrl)
 	if err != nil {
+		log.Println(err)
 		SendError(w, &ErrorResponse{
-			Message: "Error while unmarshal JSON",
+			Message: "There was an error while persisting this quotation into the DB.",
 			Reason:  err.Error(),
 			Status:  http.StatusInternalServerError,
 		})
-		log.Println("Unabled to create a connection with sqlite")
-		return
-	}
-	defer db.Close()
-	err = SaveQuotation(db, &quotation)
-	if err != nil {
-		SendError(w, &ErrorResponse{
-			Message: "Could not execute db operation",
-			Reason:  err.Error(),
-			Status:  http.StatusInternalServerError,
-		})
-		log.Println(err.Error())
-		log.Println("Unabled to execute db operation")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(w).Encode(quotation)
+	data, err := json.Marshal(usdToBrl.USDBRL)
 	if err != nil {
-		log.Println("Unabled to encode JSON")
+		log.Println(err)
 		SendError(w, &ErrorResponse{
-			Message: "Error while encoding JSON",
+			Message: "Unabled to marshal json data.",
 			Reason:  err.Error(),
 			Status:  http.StatusInternalServerError,
 		})
-		return
 	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write(data)
 }
 
-func NewHttpClientRequest() (*http.Response, error) {
+func NewHttpClientRequest() (*USDToBRL, error) {
 	client := NewHttpClient()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*200)
 	defer cancel()
@@ -138,7 +104,23 @@ func NewHttpClientRequest() (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	return client.Do(request)
+	resp, err := client.Do(request)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	content := &USDToBRL{}
+	err = json.Unmarshal(data, content)
+	if err != nil {
+		return nil, err
+	}
+	return content, nil
 }
 
 func NewHttpClient() *http.Client {
@@ -150,27 +132,40 @@ func SendError(w http.ResponseWriter, err *ErrorResponse) {
 	json.NewEncoder(w).Encode(err)
 }
 
-func SaveQuotation(db *sql.DB, usdToBrl *USDToBRL) error {
-	stmt, err := db.Prepare("INSERT INTO quotation(code, codein, name, high, low, var_bid, pct_change, bid, ask, timestamp, create_date) values(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+func SaveQuotation(usdToBrl *USDToBRL) error {
+	db, err := NewSQLite()
+	if err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+
+	stmt, err := db.PrepareContext(ctx, "INSERT INTO quotation(code, codein, name, high, low, var_bid, pct_change, bid, ask, timestamp, create_date) values(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
 	if err != nil {
 		return err
 	}
 	defer stmt.Close()
+
 	quo := usdToBrl.USDBRL
-	// codein, name, high, low, varBid, pctChange, bid, ask, timestamp, create_date
-	result, err := stmt.Exec(quo.Code, quo.Codein, quo.Name, quo.High, quo.Low, quo.VarBid, quo.PctChange, quo.Bid, quo.Ask, quo.Timestamp, quo.CreateDate)
+	result, err := stmt.ExecContext(ctx, quo.Code, quo.Codein, quo.Name, quo.High, quo.Low, quo.VarBid, quo.PctChange, quo.Bid, quo.Ask, quo.Timestamp, quo.CreateDate)
 	if err != nil {
 		return err
 	}
+
 	id, err := result.LastInsertId()
 	if err != nil {
 		return err
 	}
+
 	usdToBrl.USDBRL.ID = id
 	rows, err := result.RowsAffected()
+
 	if err != nil {
 		return err
 	}
+
+	log.Println("Quotation added successfully!")
 	log.Printf("Rows affected %d\n", rows)
 	return nil
 }
