@@ -39,6 +39,10 @@ type USDToBRL struct {
 	USDBRL Quotation `json:"USDBRL"`
 }
 
+type QuotationResponseDTO struct {
+	Bid string `json:"bid"`
+}
+
 func main() {
 	mux := http.NewServeMux()
 	registerRoutes(mux)
@@ -55,8 +59,6 @@ func registerRoutes(mux *http.ServeMux) {
 }
 
 func CotacaoHandlerFunction(w http.ResponseWriter, r *http.Request) {
-	log.Println("Iniciando cotacao controller handler!")
-	defer log.Println("Finalizando cotacao controller handler!")
 	w.Header().Add("Content-Type", "application/json")
 
 	usdToBrl, err := NewHttpClientRequest()
@@ -81,7 +83,7 @@ func CotacaoHandlerFunction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := json.Marshal(usdToBrl.USDBRL)
+	data, err := json.Marshal(QuotationResponseDTO{Bid: usdToBrl.USDBRL.Bid})
 	if err != nil {
 		log.Println(err)
 		SendError(w, &ErrorResponse{
@@ -165,7 +167,6 @@ func SaveQuotation(usdToBrl *USDToBRL) error {
 		return err
 	}
 
-	log.Println("Quotation added successfully!")
-	log.Printf("Rows affected %d\n", rows)
+	log.Printf("Successfully added quotation to database. %d Rows affected\n", rows)
 	return nil
 }
