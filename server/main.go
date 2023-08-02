@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -43,18 +44,40 @@ type QuotationResponseDTO struct {
 	Bid string `json:"bid"`
 }
 
+const dsn = "test.db?cache=shared&mode=memory"
+
+func init() {
+	ConfigureDatabase()
+}
+
 func main() {
 	mux := http.NewServeMux()
-	registerRoutes(mux)
+	RegisterRoutes(mux)
 	http.ListenAndServe(":8080", mux)
 }
 
+func ConfigureDatabase() {
+	db, err := sql.Open("sqlite3", dsn)
+	if err != nil {
+		panic(err)
+	}
+	defer db.Close()
+	result, err := db.Exec("CREATE TABLE IF NOT EXISTS quotation (id integer PRIMARY KEY AUTOINCREMENT, code text, codein text, name text, high text, low text, var_bid text, pct_change text, bid text, ask text, timestamp text, create_date text)")
+	if err != nil {
+		panic(err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("Database initialized successfully, %d rows affected\n", rows)
+}
+
 func NewSQLite() (*sql.DB, error) {
-	const dsn = "./db/test.db?cache=shared&mode=memory"
 	return sql.Open("sqlite3", dsn)
 }
 
-func registerRoutes(mux *http.ServeMux) {
+func RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/cotacao", CotacaoHandlerFunction)
 }
 
@@ -139,6 +162,7 @@ func SaveQuotation(usdToBrl *USDToBRL) error {
 	if err != nil {
 		return err
 	}
+	defer db.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
