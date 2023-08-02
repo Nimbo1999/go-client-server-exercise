@@ -6,9 +6,9 @@
 
 ### Prerequisite to run the apps.
 
-You must have [Docker](https://docs.docker.com/engine/install/) and [GOlang](https://go.dev/dl/) installed into your machine.
+You must have [Golang](https://go.dev/dl/) installed into your machine.
 
-### How to run the project into your machine.
+### How to run the project
 
 1. Clone the repository by running the command:
     ```(bash)
@@ -20,18 +20,12 @@ You must have [Docker](https://docs.docker.com/engine/install/) and [GOlang](htt
     cd go-client-server-exercise
     ```
 
-3. Run docker compose to generate the test.db SQLite file:
-    ```(bash)
-    docker-compose up -d
-    ```
-
-4. Run the server by executing the following command in your terminal:
+3. Run the server by executing the following command in your terminal:
     ```(bash)
     cd ./server && go mod tidy && go run .
     ```
 
-5. Run the client app by executing the command:
+4. Run the client app by executing the command:
     ```(bash)
     cd ./client && go mod tidy && go run .
     ```
-
