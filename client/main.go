@@ -72,6 +72,7 @@ func ReportQuotation(quotation *Quotation) error {
 
 	value, err := strconv.ParseFloat(quotation.Bid, 32)
 	if err != nil {
+		os.Remove(file.Name())
 		return err
 	}
 
@@ -79,6 +80,7 @@ func ReportQuotation(quotation *Quotation) error {
 
 	bytes, err := file.Write(data)
 	if err != nil {
+		os.Remove(file.Name())
 		return err
 	}
 	fmt.Printf("New value of USD Quotation was updated successfully!\nFile cotacao.txt generated with %d bytes.\n", bytes)
